@@ -1,7 +1,7 @@
 import asyncio
 
 class Pokemon:
-    """Pokemon class with async battle capabilities."""
+    """Individual Pokemon with stats and battle moves."""
     
     def __init__(self, name, pokemon_type, hp, attack, defense, speed):
         self.name = name
@@ -11,7 +11,7 @@ class Pokemon:
         self.attack = attack
         self.defense = defense
         self.speed = speed
-        self.status_effects = {}
+        self.status_effects = []
         self.moves = self.get_type_moves(pokemon_type)
     
     def get_type_moves(self, ptype):
@@ -49,9 +49,14 @@ class Pokemon:
     async def status_effect_tick(self):
         effects_to_remove = []
         
-        for effect_name, effect_data in self.status_effects.items():
+        for effect in self.status_effects:
             await asyncio.sleep(0.2)
             
+            if hasattr(effect, 'effect_type'):
+                effect_name = effect.effect_type.value
+            else:
+                continue
+                
             if effect_name == "poison":
                 damage = self.max_hp // 16
                 print(f"💜 {self.name} is hurt by poison! (-{damage} HP)")
@@ -62,21 +67,16 @@ class Pokemon:
                 print(f"🔥 {self.name} is hurt by burn! (-{damage} HP)")
                 self.current_hp = max(0, self.current_hp - damage)
             
-            effect_data["turns"] -= 1
-            if effect_data["turns"] <= 0:
-                effects_to_remove.append(effect_name)
+            effect.turns_remaining -= 1
+            if effect.turns_remaining <= 0:
+                effects_to_remove.append(effect)
         
         for effect in effects_to_remove:
-            del self.status_effects[effect]
-            print(f"✨ {self.name} recovers from {effect}!")
+            self.status_effects.remove(effect)
+            print(f"✨ {self.name} recovers from {effect.effect_type.value}!")
             await asyncio.sleep(0.3)
 
-    def add_status_effect(self, effect_name, turns=3):
-        self.status_effects[effect_name] = {"turns": turns}
-        print(f"🌟 {self.name} is affected by {effect_name}!")
-
 if __name__ == "__main__":
-    # Test the Pokemon class
     pikachu = Pokemon("Pikachu", "Electric", 100, 55, 40, 90)
     charmander = Pokemon("Charmander", "Fire", 95, 52, 43, 65)
     

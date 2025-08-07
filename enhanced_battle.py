@@ -77,11 +77,13 @@ class EnhancedBattleSystem:
         available_moves = getattr(attacker, 'moves', ['Tackle', 'Scratch'])
         chosen_move = random.choice(available_moves)
         
-        if 'paralysis' in getattr(attacker, 'status_effects', {}):
-            if random.random() < 0.25:
-                print(f"⚡ {attacker.name} is paralyzed and can't move!")
-                await asyncio.sleep(1)
-                return
+        is_paralyzed = any(effect.effect_type.value == 'paralysis' 
+                          for effect in getattr(attacker, 'status_effects', []))
+        
+        if is_paralyzed and random.random() < 0.25:
+            print(f"⚡ {attacker.name} is paralyzed and can't move!")
+            await asyncio.sleep(1)
+            return
         
         await self.use_move_with_effects(attacker, defender, chosen_move)
     
@@ -122,16 +124,19 @@ class EnhancedBattleSystem:
     
     async def apply_move_effects(self, move_name, attacker, defender):
         move_effects = {
-            'Poison Sting': lambda: defender.add_status_effect('poison', 3),
-            'Ember': lambda: defender.add_status_effect('burn', 3),
-            'Thunder Wave': lambda: defender.add_status_effect('paralysis', 4),
-            'Sleep Powder': lambda: defender.add_status_effect('sleep', 2),
+            'Poison Sting': 'poison',
+            'Ember': 'burn',
+            'Thunder Wave': 'paralysis',
+            'Sleep Powder': 'sleep',
         }
         
-        if move_name in move_effects:
-            if random.random() < 0.3:
-                move_effects[move_name]()
-                await asyncio.sleep(0.5)
+        if move_name in move_effects and random.random() < 0.3:
+            from status_effects import StatusType, StatusEffect
+            effect_type = getattr(StatusType, move_effects[move_name].upper())
+            effect = StatusEffect(effect_type, 3)
+            defender.status_effects.append(effect)
+            print(f"🌟 {defender.name} was {move_effects[move_name]}ed!")
+            await asyncio.sleep(0.5)
 
 async def test_enhanced_battle():
     pikachu = Pokemon("Pikachu", "Electric", 100, 55, 40, 90)
@@ -143,4 +148,3 @@ async def test_enhanced_battle():
 if __name__ == "__main__":
     print("🧪 Testing Enhanced Battle System")
     asyncio.run(test_enhanced_battle())
-    
