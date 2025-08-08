@@ -18,6 +18,7 @@ class CompletePokemonGame:
         self.battle_system = InteractiveBattleSystem()
         self.player_team = []
         self.current_opponent = None
+        self.in_trainer_battle = False
     
     async def start_game(self):
         await self.ui.type_message("🎮 Welcome to Pokemon Battle Arena! 🎮", 0.05)
@@ -62,15 +63,17 @@ class CompletePokemonGame:
         while True:
             await self.show_main_menu()
             
-            choice = await self.ui.get_user_input("Choose an option (1-4): ")
+            choice = await self.ui.get_user_input("Choose an option (1-5): ")
             
             if choice == "1":
                 await self.wild_pokemon_battle()
             elif choice == "2":
                 await self.trainer_battle()
             elif choice == "3":
-                await self.show_team_status()
+                await self.pokemon_center()
             elif choice == "4":
+                await self.show_team_status()
+            elif choice == "5":
                 await self.ui.type_message("👋 Thanks for playing! Goodbye!")
                 break
             else:
@@ -83,11 +86,38 @@ class CompletePokemonGame:
         print("="*50)
         print("1. 🌿 Battle Wild Pokemon")
         print("2. 👨‍🎓 Battle Trainer")
-        print("3. 📋 Check Team Status")
-        print("4. 🚪 Exit Game")
+        print("3. 🏥 Pokemon Center")
+        print("4. 📋 Check Team Status")
+        print("5. 🚪 Exit Game")
         print("="*50)
     
+    async def pokemon_center(self):
+        await self.ui.type_message("🏥 Welcome to the Pokemon Center!")
+        await asyncio.sleep(1)
+        
+        healed_any = False
+        for pokemon in self.player_team:
+            if pokemon.current_hp < pokemon.max_hp or pokemon.status_effects:
+                old_hp = pokemon.current_hp
+                pokemon.current_hp = pokemon.max_hp
+                pokemon.status_effects = []
+                
+                if old_hp == 0:
+                    await self.ui.type_message(f"✨ {pokemon.name} was revived and fully healed!")
+                else:
+                    await self.ui.type_message(f"✨ {pokemon.name} was fully healed!")
+                healed_any = True
+                await asyncio.sleep(0.8)
+        
+        if not healed_any:
+            await self.ui.type_message("💚 Your Pokemon are already in perfect health!")
+        else:
+            await self.ui.type_message("🎉 All your Pokemon are now healthy!")
+        
+        await self.ui.get_user_input("\nPress Enter to continue...")
+    
     async def wild_pokemon_battle(self):
+        self.in_trainer_battle = False
         wild_pokemon_list = [
             ("Rattata", "Normal", 80, 45, 35, 72),
             ("Pidgy", "Flying", 85, 50, 40, 56),
@@ -104,6 +134,7 @@ class CompletePokemonGame:
         await self.enhanced_battle(player_pokemon, wild_pokemon)
     
     async def trainer_battle(self):
+        self.in_trainer_battle = True
         trainer_teams = [
             [("Machop", "Fighting", 90, 60, 50, 35), ("Geodude", "Rock", 90, 60, 70, 20)],
             [("Magikarp", "Water", 60, 10, 55, 80), ("Gyarados", "Water", 150, 90, 79, 81)],
@@ -138,22 +169,29 @@ class CompletePokemonGame:
             
             if player_pokemon.speed >= opponent.speed:
                 if player_can_act:
-                    await self.player_enhanced_turn(player_pokemon, opponent)
+                    action_result = await self.player_enhanced_turn(player_pokemon, opponent)
+                    if action_result == "run":
+                        battle_active = False
+                        break
                 if opponent.current_hp > 0 and opponent_can_act:
                     await self.ai_enhanced_turn(opponent, player_pokemon)
             else:
                 if opponent_can_act:
                     await self.ai_enhanced_turn(opponent, player_pokemon)
                 if player_pokemon.current_hp > 0 and player_can_act:
-                    await self.player_enhanced_turn(player_pokemon, opponent)
+                    action_result = await self.player_enhanced_turn(player_pokemon, opponent)
+                    if action_result == "run":
+                        battle_active = False
+                        break
             
             turn += 1
             await asyncio.sleep(1)
         
-        if player_pokemon.current_hp > 0:
-            await self.ui.type_message(f"🎉 {player_pokemon.name} won!")
-        else:
-            await self.ui.type_message(f"💀 {player_pokemon.name} fainted!")
+        if battle_active:
+            if player_pokemon.current_hp > 0:
+                await self.ui.type_message(f"🎉 {player_pokemon.name} won!")
+            else:
+                await self.ui.type_message(f"💀 {player_pokemon.name} fainted!")
     
     async def player_enhanced_turn(self, player_pokemon, opponent):
         action = await self.ui.display_battle_menu(player_pokemon, opponent)
@@ -166,10 +204,31 @@ class CompletePokemonGame:
                     await self.special_moves.use_special_move(player_pokemon, opponent, move_choice)
                 else:
                     await self.execute_regular_move(player_pokemon, opponent, move_choice)
+            return "attack"
+            
+        elif action == "2":
+            await self.ui.display_message("🎒 No items! Visit Pokemon Center to heal!")
+            await asyncio.sleep(1)
+            return "continue"
+            
+        elif action == "3":
+            await self.ui.display_message("🔄 No other Pokemon available!")
+            await asyncio.sleep(1)
+            return "continue"
+            
         elif action == "4":
-            await self.ui.type_message("🏃 You ran away from the battle!")
-            return False
-        return True
+            if self.in_trainer_battle:
+                await self.ui.display_message("❌ You cannot run from trainer battles!")
+                await asyncio.sleep(1)
+                return "continue"
+            else:
+                await self.ui.type_message("🏃 You ran away from the battle!")
+                return "run"
+            
+        else:
+            await self.ui.display_message("❌ Invalid choice! Please try again.")
+            await asyncio.sleep(1)
+            return "continue"
     
     async def ai_enhanced_turn(self, ai_pokemon, target):
         await self.ui.display_message(f"🤖 {ai_pokemon.name} is deciding...")
